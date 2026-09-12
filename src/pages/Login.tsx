@@ -10,8 +10,8 @@ const DEMO_ACCOUNTS = [
 
 export function Login() {
   const { session, loading, signIn } = useAuth()
-  const [email, setEmail] = useState('warehouse@dsddirect.demo')
-  const [password, setPassword] = useState('DemoPass123!')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -50,7 +50,10 @@ export function Login() {
           className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
         >
           <h2 className="text-lg font-semibold text-slate-900">Sign in</h2>
-          <p className="mt-1 text-xs text-slate-500">Authentication required — roles from JWT app_metadata</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Use your invited email and password. Roles come from JWT{' '}
+            <code className="rounded bg-slate-100 px-1">app_metadata.role</code>.
+          </p>
 
           <label className="mt-5 block text-xs font-medium text-slate-600">Email</label>
           <input
@@ -59,6 +62,7 @@ export function Login() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@company.com"
             className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none ring-brand-500 focus:ring-2"
           />
 
@@ -85,11 +89,32 @@ export function Login() {
           >
             {submitting ? 'Signing in…' : 'Sign in'}
           </button>
+
+          <p className="mt-4 text-[11px] leading-relaxed text-slate-500">
+            <strong className="text-slate-700">Invite note:</strong> Admins invite users in the{' '}
+            <a
+              className="font-medium text-brand-700 underline"
+              href="https://supabase.com/dashboard/project/jdtdtuioenznqyipngvw/auth/users"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Supabase Auth dashboard
+            </a>{' '}
+            and set <code className="rounded bg-slate-100 px-1">app_metadata.role</code> to{' '}
+            <code className="rounded bg-slate-100 px-1">admin</code>,{' '}
+            <code className="rounded bg-slate-100 px-1">warehouse</code>, or{' '}
+            <code className="rounded bg-slate-100 px-1">field_rep</code>.
+          </p>
         </form>
 
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-white/80 p-4 text-xs text-slate-600">
-          <p className="font-semibold text-slate-800">Demo accounts</p>
-          <p className="mt-1 text-slate-500">Password for all: <span className="font-mono">DemoPass123!</span></p>
+        <details className="mt-4 rounded-2xl border border-slate-200 bg-white/80 p-4 text-xs text-slate-600">
+          <summary className="cursor-pointer font-semibold text-slate-800">
+            Pilot mode — demo accounts
+          </summary>
+          <p className="mt-2 text-slate-500">
+            For UAT only. Password for all:{' '}
+            <span className="font-mono">DemoPass123!</span>. Replace before production.
+          </p>
           <ul className="mt-3 space-y-2">
             {DEMO_ACCOUNTS.map((a) => (
               <li key={a.email}>
@@ -109,7 +134,7 @@ export function Login() {
               </li>
             ))}
           </ul>
-        </div>
+        </details>
       </div>
     </div>
   )

@@ -9,6 +9,7 @@ const warehouseNav = [
   { to: '/cycle-counting', label: 'Cycle Counting' },
   { to: '/slotting', label: 'Slotting' },
   { to: '/palletization', label: 'Palletization & Loads' },
+  { to: '/import', label: 'CSV Import' },
 ]
 
 const fieldNav = [
@@ -49,6 +50,7 @@ export function Layout() {
   const { user, role, signOut } = useAuth()
   const showWarehouse = canAccessWarehouse(role)
   const showField = canAccessField(role)
+  const isDemo = (user?.email ?? '').endsWith('@dsddirect.demo')
 
   const sidebar = (
     <>
@@ -69,6 +71,7 @@ export function Layout() {
           </p>
           <div className="space-y-0.5">
             <NavItem to="/" label="Dashboard" end />
+            <NavItem to="/settings" label="Account" />
           </div>
         </div>
         {showWarehouse && (
@@ -173,6 +176,11 @@ export function Layout() {
             <span className="text-xs text-slate-500">Rochester DC · Route 12</span>
           </div>
         </header>
+        {isDemo && (
+          <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs font-medium text-amber-900 lg:px-8">
+            Demo account — replace before production · Role: {roleLabel(role)} ({user?.email})
+          </div>
+        )}
         <main className="flex-1 px-4 py-6 lg:px-8">
           {loading ? (
             <p className="text-sm text-slate-500">Loading live warehouse data…</p>

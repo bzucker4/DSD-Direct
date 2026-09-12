@@ -922,3 +922,410 @@ export function onHandForProduct(lots: Lot[], productId: string): number {
     .filter((l) => l.productId === productId && l.fefoStatus !== 'expired')
     .reduce((s, l) => s + l.qtyOnHand, 0)
 }
+
+/* ---------- customer pricing ---------- */
+
+export type PriceSource = 'account' | 'tier'
+
+export type ResolvedPrice = {
+  productId: string
+  unitPrice: number
+  source: PriceSource
+}
+
+type CustomerPriceRow = {
+  id?: number | string
+  customer_id: string
+  product_id: string
+  unit_price: number | string
+  effective_from: string | null
+  effective_to: string | null
+}
+
+export type CustomerPrice = {
+  id?: string
+  customerId: string
+  productId: string
+  unitPrice: number
+  effectiveFrom: string | null
+  effectiveTo: string | null
+}
+
+export function mapCustomerPrice(row: CustomerPriceRow): CustomerPrice {
+  return {
+    id: row.id != null ? String(row.id) : undefined,
+    customerId: row.customer_id,
+    productId: row.product_id,
+    unitPrice: num(row.unit_price),
+    effectiveFrom: row.effective_from,
+    effectiveTo: row.effective_to,
+  }
+}
+
+export async function fetchCustomerPrices(customerId?: string): Promise<CustomerPrice[]> {
+  let query = supabase.from('customer_prices').select('*').order('customer_id')
+  if (customerId) query = query.eq('customer_id', customerId)
+  const { data, error } = await query
+  throwIf(error)
+  return ((data ?? []) as CustomerPriceRow[]).map(mapCustomerPrice)
+}
+
+/** Active account overrides for a customer (effective window contains today or nulls). */
+function activeOverrideSet(prices: CustomerPrice[], today: string): Set<string> {
+  const set = new Set<string>()
+  for (const p of prices) {
+    const fromOk = !p.effectiveFrom || p.effectiveFrom <= today
+    const toOk = !p.effectiveTo || p.effectiveTo >= today
+    if (fromOk && toOk) set.add(p.productId)
+  }
+  return set
+}
+
+export async function resolveCustomerPrice(
+  customerId: string,
+  productId: string,
+): Promise<number> {
+  const { data, error } = await supabase.rpc('resolve_customer_price', {
+    p_customer_id: customerId,
+    p_product_id: productId,
+  })
+  throwIf(error)
+  return num(data)
+}
+
+export async function resolveCustomerPricesBatch(
+  customerId: string,
+  productIds: string[],
+  fallbackTierPrice: (productId: string) => number,
+): Promise<Map<string, ResolvedPrice>> {
+  const today = new Date().toISOString().slice(0, 10)
+  const overrides = await fetchCustomerPrices(customerId)
+  const active = activeOverrideSet(overrides, today)
+
+  const unique = [...new Set(productIds)]
+  const results = await Promise.all(
+    unique.map(async (productId) => {
+      try {
+        const unitPrice = await resolveCustomerPrice(customerId, productId)
+        return {
+          productId,
+          unitPrice,
+          source: (active.has(productId) ? 'account' : 'tier') as PriceSource,
+        }
+      } catch {
+        return {
+          productId,
+          unitPrice: fallbackTierPrice(productId),
+          source: 'tier' as PriceSource,
+        }
+      }
+    }),
+  )
+  return new Map(results.map((r) => [r.productId, r]))
+}
+
+export async function upsertCustomerPrice(input: {
+  customerId: string
+  productId: string
+  unitPrice: number
+  effectiveFrom?: string | null
+  effectiveTo?: string | null
+}): Promise<CustomerPrice> {
+  const row = {
+    customer_id: input.customerId,
+    product_id: input.productId,
+    unit_price: input.unitPrice,
+    effective_from: input.effectiveFrom ?? new Date().toISOString().slice(0, 10),
+    effective_to: input.effectiveTo ?? null,
+  }
+  // Prefer upsert on (customer_id, product_id) if unique; fall back to insert
+  const { data: existing } = await supabase
+    .from('customer_prices')
+    .select('*')
+    .eq('customer_id', input.customerId)
+    .eq('product_id', input.productId)
+    .is('effective_to', null)
+    .limit(1)
+
+  if (existing && existing.length > 0) {
+    const id = (existing[0] as CustomerPriceRow).id
+    const { data, error } = await supabase
+      .from('customer_prices')
+      .update({
+        unit_price: row.unit_price,
+        effective_from: row.effective_from,
+        effective_to: row.effective_to,
+      })
+      .eq('id', id as string | number)
+      .select()
+      .single()
+    throwIf(error)
+    return mapCustomerPrice(data as CustomerPriceRow)
+  }
+
+  const { data, error } = await supabase.from('customer_prices').insert(row).select().single()
+  throwIf(error)
+  return mapCustomerPrice(data as CustomerPriceRow)
+}
+
+export async function deleteCustomerPrice(id: string): Promise<void> {
+  const { error } = await supabase.from('customer_prices').delete().eq('id', id)
+  throwIf(error)
+}
+
+/* ---------- CSV import ---------- */
+
+export type ImportKind = 'products' | 'customers' | 'prices'
+
+export type ImportBatchResult = {
+  id?: string
+  kind: ImportKind
+  inserted: number
+  updated: number
+  errors: string[]
+}
+
+function sanitizeIdPart(raw: string): string {
+  return raw.trim().replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40)
+}
+
+export function parseCsv(text: string): { headers: string[]; rows: Record<string, string>[] } {
+  const lines = text
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+  if (lines.length === 0) return { headers: [], rows: [] }
+
+  function splitLine(line: string): string[] {
+    const out: string[] = []
+    let cur = ''
+    let inQuotes = false
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i]
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          cur += '"'
+          i++
+        } else {
+          inQuotes = !inQuotes
+        }
+      } else if (ch === ',' && !inQuotes) {
+        out.push(cur.trim())
+        cur = ''
+      } else {
+        cur += ch
+      }
+    }
+    out.push(cur.trim())
+    return out
+  }
+
+  const headers = splitLine(lines[0]).map((h) => h.toLowerCase())
+  const rows = lines.slice(1).map((line) => {
+    const cols = splitLine(line)
+    const row: Record<string, string> = {}
+    headers.forEach((h, i) => {
+      row[h] = cols[i] ?? ''
+    })
+    return row
+  })
+  return { headers, rows }
+}
+
+async function writeImportBatch(
+  kind: ImportKind,
+  inserted: number,
+  updated: number,
+  errors: string[],
+): Promise<string | undefined> {
+  const row = {
+    kind,
+    inserted_count: inserted,
+    updated_count: updated,
+    error_count: errors.length,
+    errors: errors.slice(0, 50),
+    created_at: new Date().toISOString(),
+  }
+  const { data, error } = await supabase.from('import_batches').insert(row).select('id').maybeSingle()
+  // Don't fail the import if audit insert fails (schema may vary slightly)
+  if (error) {
+    // try alternate column names
+    const alt = {
+      import_type: kind,
+      inserted,
+      updated,
+      error_count: errors.length,
+      error_messages: errors.slice(0, 50),
+    }
+    const { data: d2, error: e2 } = await supabase
+      .from('import_batches')
+      .insert(alt)
+      .select('id')
+      .maybeSingle()
+    if (e2) return undefined
+    return d2?.id as string | undefined
+  }
+  return data?.id as string | undefined
+}
+
+export async function importProductsCsv(text: string): Promise<ImportBatchResult> {
+  const { rows } = parseCsv(text)
+  const errors: string[] = []
+  let inserted = 0
+  let updated = 0
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]
+    const sku = (r.sku ?? '').trim()
+    if (!sku) {
+      errors.push(`Row ${i + 2}: missing sku`)
+      continue
+    }
+    const id = `p_${sanitizeIdPart(sku)}`
+    const payload = {
+      id,
+      sku,
+      name: (r.name ?? sku).trim(),
+      category: (r.category ?? 'Uncategorized').trim(),
+      brand: (r.brand ?? '').trim(),
+      unit: (r.unit ?? 'case').trim(),
+      case_pack: num(r.case_pack, 1),
+      weight_lbs: num(r.weight_lbs),
+      height_in: num(r.height_in),
+      par_level: num(r.par_level),
+      base_price: num(r.base_price),
+    }
+    try {
+      const { data: existing } = await supabase.from('products').select('id').eq('sku', sku).maybeSingle()
+      if (existing) {
+        const { error } = await supabase.from('products').update(payload).eq('id', (existing as { id: string }).id)
+        throwIf(error)
+        updated++
+      } else {
+        const { error } = await supabase.from('products').upsert(payload, { onConflict: 'id' })
+        throwIf(error)
+        inserted++
+      }
+    } catch (err) {
+      errors.push(`Row ${i + 2} (${sku}): ${err instanceof Error ? err.message : 'failed'}`)
+    }
+  }
+
+  const batchId = await writeImportBatch('products', inserted, updated, errors)
+  return { id: batchId, kind: 'products', inserted, updated, errors }
+}
+
+export async function importCustomersCsv(text: string): Promise<ImportBatchResult> {
+  const { rows } = parseCsv(text)
+  const errors: string[] = []
+  let inserted = 0
+  let updated = 0
+  const validTypes = new Set(['grocery', 'convenience', 'on_premise', 'restaurant'])
+  const validTiers = new Set(['A', 'B', 'C'])
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]
+    const account = (r.account_number ?? '').trim()
+    if (!account) {
+      errors.push(`Row ${i + 2}: missing account_number`)
+      continue
+    }
+    const id = `c_${sanitizeIdPart(account)}`
+    const typeRaw = (r.type ?? 'grocery').trim()
+    const tierRaw = (r.price_tier ?? 'B').trim().toUpperCase()
+    const payload = {
+      id,
+      account_number: account,
+      name: (r.name ?? account).trim(),
+      type: validTypes.has(typeRaw) ? typeRaw : 'grocery',
+      address: (r.address ?? '').trim(),
+      city: (r.city ?? '').trim(),
+      price_tier: validTiers.has(tierRaw) ? tierRaw : 'B',
+      suggested_par: {},
+    }
+    try {
+      const { data: existing } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('account_number', account)
+        .maybeSingle()
+      if (existing) {
+        const { error } = await supabase
+          .from('customers')
+          .update(payload)
+          .eq('id', (existing as { id: string }).id)
+        throwIf(error)
+        updated++
+      } else {
+        const { error } = await supabase.from('customers').upsert(payload, { onConflict: 'id' })
+        throwIf(error)
+        inserted++
+      }
+    } catch (err) {
+      errors.push(`Row ${i + 2} (${account}): ${err instanceof Error ? err.message : 'failed'}`)
+    }
+  }
+
+  const batchId = await writeImportBatch('customers', inserted, updated, errors)
+  return { id: batchId, kind: 'customers', inserted, updated, errors }
+}
+
+export async function importPricesCsv(text: string): Promise<ImportBatchResult> {
+  const { rows } = parseCsv(text)
+  const errors: string[] = []
+  let inserted = 0
+  let updated = 0
+
+  const { data: customers } = await supabase.from('customers').select('id, account_number')
+  const { data: products } = await supabase.from('products').select('id, sku')
+  const acctToId = new Map(
+    ((customers ?? []) as { id: string; account_number: string }[]).map((c) => [
+      c.account_number,
+      c.id,
+    ]),
+  )
+  const skuToId = new Map(
+    ((products ?? []) as { id: string; sku: string }[]).map((p) => [p.sku, p.id]),
+  )
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]
+    const account = (r.account_number ?? '').trim()
+    const sku = (r.sku ?? '').trim()
+    const unitPrice = num(r.unit_price, NaN)
+    if (!account || !sku || !Number.isFinite(unitPrice)) {
+      errors.push(`Row ${i + 2}: need account_number, sku, unit_price`)
+      continue
+    }
+    const customerId = acctToId.get(account)
+    const productId = skuToId.get(sku)
+    if (!customerId) {
+      errors.push(`Row ${i + 2}: unknown account_number ${account}`)
+      continue
+    }
+    if (!productId) {
+      errors.push(`Row ${i + 2}: unknown sku ${sku}`)
+      continue
+    }
+    const effectiveFrom = (r.effective_from ?? '').trim() || new Date().toISOString().slice(0, 10)
+    try {
+      const before = await fetchCustomerPrices(customerId)
+      const had = before.some((p) => p.productId === productId && !p.effectiveTo)
+      await upsertCustomerPrice({
+        customerId,
+        productId,
+        unitPrice,
+        effectiveFrom,
+        effectiveTo: null,
+      })
+      if (had) updated++
+      else inserted++
+    } catch (err) {
+      errors.push(`Row ${i + 2} (${account}/${sku}): ${err instanceof Error ? err.message : 'failed'}`)
+    }
+  }
+
+  const batchId = await writeImportBatch('prices', inserted, updated, errors)
+  return { id: batchId, kind: 'prices', inserted, updated, errors }
+}

@@ -12,6 +12,8 @@ import { Surveys } from './pages/Surveys'
 import { PosManagement } from './pages/PosManagement'
 import { Planogram } from './pages/Planogram'
 import { Login } from './pages/Login'
+import { ImportPage } from './pages/Import'
+import { Settings } from './pages/Settings'
 import type { ReactNode } from 'react'
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -51,6 +53,7 @@ export default function App() {
         }
       >
         <Route index element={<Dashboard />} />
+        <Route path="settings" element={<Settings />} />
         <Route
           path="inventory"
           element={
@@ -88,6 +91,14 @@ export default function App() {
           element={
             <RequireWarehouse>
               <Palletization />
+            </RequireWarehouse>
+          }
+        />
+        <Route
+          path="import"
+          element={
+            <RequireWarehouse>
+              <ImportPage />
             </RequireWarehouse>
           }
         />

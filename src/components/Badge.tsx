@@ -20,6 +20,8 @@ const styles: Record<string, string> = {
   installed: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
   retired: 'bg-slate-100 text-slate-500 ring-slate-400/20',
   default: 'bg-slate-100 text-slate-700 ring-slate-500/20',
+  account: 'bg-violet-50 text-violet-800 ring-violet-600/20',
+  tier: 'bg-slate-100 text-slate-600 ring-slate-500/20',
 }
 
 export function Badge({

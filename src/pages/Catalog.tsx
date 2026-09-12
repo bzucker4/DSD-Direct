@@ -1,18 +1,22 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Badge } from '../components/Badge'
 import { Card } from '../components/Card'
 import { PageHeader } from '../components/PageHeader'
 import { customerPrice } from '../data/customers'
-import { onHandForProduct } from '../lib/api'
+import { onHandForProduct, resolveCustomerPricesBatch, type ResolvedPrice } from '../lib/api'
 import { useAppData } from '../lib/DataContext'
 import type { CatalogOrderLine } from '../types'
 
 export function Catalog() {
-  const { customers, products, lots, salesOrders, getCustomer, submitOrder, orderHistoryFor } = useAppData()
+  const { customers, products, lots, salesOrders, getCustomer, submitOrder, orderHistoryFor } =
+    useAppData()
   const [customerId, setCustomerId] = useState(customers[0]?.id ?? 'c1')
   const [cart, setCart] = useState<Record<string, number>>({})
   const [toast, setToast] = useState('')
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
+  const [priceMap, setPriceMap] = useState<Map<string, ResolvedPrice>>(new Map())
+  const [pricesLoading, setPricesLoading] = useState(false)
 
   const customer = getCustomer(customerId) ?? customers[0]
   const history = orderHistoryFor(customerId)
@@ -28,6 +32,53 @@ export function Catalog() {
         p.category.toLowerCase().includes(q),
     )
   }, [search, products])
+
+  useEffect(() => {
+    if (!customer) {
+      setPriceMap(new Map())
+      return
+    }
+    let cancelled = false
+    setPricesLoading(true)
+    const ids = products.map((p) => p.id)
+    void resolveCustomerPricesBatch(customer.id, ids, (productId) => {
+      const p = products.find((x) => x.id === productId)
+      return customerPrice(p?.basePrice ?? 0, customer.priceTier)
+    })
+      .then((map) => {
+        if (!cancelled) setPriceMap(map)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          const fallback = new Map<string, ResolvedPrice>()
+          for (const p of products) {
+            fallback.set(p.id, {
+              productId: p.id,
+              unitPrice: customerPrice(p.basePrice, customer.priceTier),
+              source: 'tier',
+            })
+          }
+          setPriceMap(fallback)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPricesLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [customer, products])
+
+  function unitPriceFor(productId: string): number {
+    const resolved = priceMap.get(productId)
+    if (resolved) return resolved.unitPrice
+    const p = products.find((x) => x.id === productId)
+    return customer ? customerPrice(p?.basePrice ?? 0, customer.priceTier) : 0
+  }
+
+  function sourceFor(productId: string): 'account' | 'tier' {
+    return priceMap.get(productId)?.source ?? 'tier'
+  }
 
   function addToCart(productId: string, qty = 1) {
     setCart((c) => ({ ...c, [productId]: (c[productId] ?? 0) + qty }))
@@ -46,10 +97,7 @@ export function Catalog() {
     ? Object.entries(cart).map(([productId, qty]) => ({
         productId,
         qty,
-        unitPrice: customerPrice(
-          products.find((p) => p.id === productId)?.basePrice ?? 0,
-          customer.priceTier,
-        ),
+        unitPrice: unitPriceFor(productId),
       }))
     : []
   const total = lines.reduce((s, l) => s + l.qty * l.unitPrice, 0)
@@ -77,7 +125,7 @@ export function Catalog() {
     <div>
       <PageHeader
         title="Digital Catalog & Order Entry"
-        subtitle="Customer pricing, inventory, par suggestions, and live order submit"
+        subtitle="Customer pricing via resolve_customer_price, inventory, par suggestions"
       />
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -102,6 +150,7 @@ export function Catalog() {
           onChange={(e) => setSearch(e.target.value)}
           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm sm:max-w-xs"
         />
+        {pricesLoading && <span className="text-xs text-slate-500">Resolving prices…</span>}
       </div>
 
       {toast && (
@@ -115,7 +164,8 @@ export function Catalog() {
           <Card title="Products">
             <div className="space-y-2">
               {filtered.map((p) => {
-                const price = customerPrice(p.basePrice, customer.priceTier)
+                const price = unitPriceFor(p.id)
+                const source = sourceFor(p.id)
                 const onHand = onHandForProduct(lots, p.id)
                 const par = customer.suggestedPar[p.id]
                 const inCart = cart[p.id] ?? 0
@@ -128,13 +178,20 @@ export function Catalog() {
                       <p className="text-sm font-semibold text-slate-900">{p.name}</p>
                       <p className="text-xs text-slate-500">
                         {p.sku} · {p.category} · {onHand} on hand
-                        {par != null && (
-                          <span className="ml-2 text-brand-600">Par {par}</span>
-                        )}
+                        {par != null && <span className="ml-2 text-brand-600">Par {par}</span>}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-sm font-bold text-slate-900">${price.toFixed(2)}</span>
+                      <div className="text-right">
+                        <span className="text-sm font-bold text-slate-900">${price.toFixed(2)}</span>
+                        <div className="mt-0.5">
+                          {source === 'account' ? (
+                            <Badge tone="account">Account-specific</Badge>
+                          ) : (
+                            <Badge tone="tier">Tier default</Badge>
+                          )}
+                        </div>
+                      </div>
                       {inCart > 0 ? (
                         <div className="flex items-center gap-1">
                           <button
