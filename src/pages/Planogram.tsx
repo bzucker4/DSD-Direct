@@ -5,30 +5,49 @@ import { useAppData } from '../lib/DataContext'
 import type { ShelfSlot } from '../types'
 
 export function Planogram() {
-  const { customers, products, shelfSlots, getProduct, patchShelfSlot } = useAppData()
+  const { customers, products, shelfSlots, getProduct, patchShelfSlot, ensureAccountPlanogram } =
+    useAppData()
   const [customerId, setCustomerId] = useState(customers[0]?.id ?? 'c1')
-  const [selected, setSelected] = useState<string | null>(null)
+  // Select by shelf/position so the selection survives the template → account copy
+  const [selected, setSelected] = useState<{ shelf: number; position: number } | null>(null)
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
 
-  const slots = shelfSlots
+  // The account's own layout if it has one, otherwise the shared template (customer_id NULL)
+  const accountSlots = shelfSlots.filter((s) => s.customerId === customerId)
+  const usingTemplate = accountSlots.length === 0
+  const slots = usingTemplate ? shelfSlots.filter((s) => !s.customerId) : accountSlots
   const shelves = [1, 2, 3, 4]
-  const sel = slots.find((s) => s.id === selected)
+  const sel = selected
+    ? slots.find((s) => s.shelf === selected.shelf && s.position === selected.position)
+    : undefined
 
   // Save competitor brand on blur/Enter instead of on every keystroke
   function commitBrand(raw: string) {
     if (!sel) return
     const next = raw.trim() || null
     if (next === (sel.competitorBrand ?? null)) return
-    void updateSlot(sel.id, {
+    void updateSlot(sel, {
       competitorBrand: next,
       productId: next ? null : sel.productId,
     })
   }
 
-  async function updateSlot(id: string, patch: Partial<ShelfSlot>) {
+  async function updateSlot(slot: ShelfSlot, patch: Partial<ShelfSlot>) {
     setBusy(true)
+    setError('')
     try {
-      await patchShelfSlot(id, patch)
+      let targetId = slot.id
+      if (!slot.customerId) {
+        // First edit for this account: copy the template, then edit the copy
+        const rows = await ensureAccountPlanogram(customerId)
+        const copy = rows.find((r) => r.shelf === slot.shelf && r.position === slot.position)
+        if (!copy) throw new Error('Could not create this account’s planogram')
+        targetId = copy.id
+      }
+      await patchShelfSlot(targetId, patch)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save slot')
     } finally {
       setBusy(false)
     }
@@ -47,7 +66,11 @@ export function Planogram() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <select
           value={customerId}
-          onChange={(e) => setCustomerId(e.target.value)}
+          onChange={(e) => {
+            setCustomerId(e.target.value)
+            setSelected(null)
+            setError('')
+          }}
           className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
         >
           {customers.map((c) => (
@@ -62,7 +85,18 @@ export function Planogram() {
         <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800">
           {competitorCount} competitor
         </span>
+        <span
+          data-testid="planogram-source"
+          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+            usingTemplate ? 'bg-slate-100 text-slate-600' : 'bg-brand-50 text-brand-700'
+          }`}
+        >
+          {usingTemplate ? 'Template layout (edit to customize)' : 'Account layout'}
+        </span>
       </div>
+      {error && (
+        <p className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</p>
+      )}
 
       <div className="mx-auto grid max-w-3xl gap-4 lg:grid-cols-5">
         <div className="lg:col-span-3">
@@ -82,12 +116,13 @@ export function Planogram() {
                       .sort((a, b) => a.position - b.position)
                       .map((slot) => {
                         const p = slot.productId ? getProduct(slot.productId) : null
-                        const isSel = selected === slot.id
+                        const isSel =
+                          selected?.shelf === slot.shelf && selected?.position === slot.position
                         return (
                           <button
                             key={slot.id}
                             type="button"
-                            onClick={() => setSelected(slot.id)}
+                            onClick={() => setSelected({ shelf: slot.shelf, position: slot.position })}
                             className={`relative flex min-h-[72px] flex-col items-center justify-center rounded-lg border p-1 text-center transition ${
                               slot.competitorBrand
                                 ? 'border-amber-300 bg-amber-50'
@@ -133,7 +168,7 @@ export function Planogram() {
                   disabled={busy}
                   value={sel.productId ?? ''}
                   onChange={(e) =>
-                    void updateSlot(sel.id, {
+                    void updateSlot(sel, {
                       productId: e.target.value || null,
                       competitorBrand: e.target.value ? null : sel.competitorBrand,
                     })
@@ -170,7 +205,7 @@ export function Planogram() {
                   max={6}
                   disabled={busy}
                   value={sel.facingCount}
-                  onChange={(e) => void updateSlot(sel.id, { facingCount: Number(e.target.value) })}
+                  onChange={(e) => void updateSlot(sel, { facingCount: Number(e.target.value) })}
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
                 />
               </div>
@@ -179,7 +214,7 @@ export function Planogram() {
                   type="checkbox"
                   disabled={busy}
                   checked={sel.oos}
-                  onChange={(e) => void updateSlot(sel.id, { oos: e.target.checked })}
+                  onChange={(e) => void updateSlot(sel, { oos: e.target.checked })}
                   className="rounded border-slate-300"
                 />
                 Out of stock (OOS)

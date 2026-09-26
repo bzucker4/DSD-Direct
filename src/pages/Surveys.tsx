@@ -11,6 +11,8 @@ export function Surveys() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
+  const accountResults = surveyResults.filter((r) => r.customerId === customerId)
+  const selectedCustomer = getCustomer(customerId)
   const categories = [...new Set(surveyQuestions.map((q) => q.category))]
 
   function setAnswer(id: string, value: string | number | boolean) {
@@ -135,8 +137,9 @@ export function Surveys() {
         </div>
 
         <Card title="Saved surveys" className="lg:col-span-2">
+          <p className="mb-3 text-xs text-slate-500">For {selectedCustomer?.name ?? 'this account'}</p>
           <ul className="space-y-3">
-            {surveyResults.map((r) => {
+            {accountResults.map((r) => {
               const c = getCustomer(r.customerId)
               return (
                 <li key={r.id} className="rounded-lg border border-slate-100 p-3">
@@ -151,8 +154,8 @@ export function Surveys() {
                 </li>
               )
             })}
-            {surveyResults.length === 0 && (
-              <li className="text-sm text-slate-500">No surveys saved yet.</li>
+            {accountResults.length === 0 && (
+              <li className="text-sm text-slate-500">No surveys saved for this account yet.</li>
             )}
           </ul>
         </Card>

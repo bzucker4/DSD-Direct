@@ -10,8 +10,12 @@ import {
 } from 'react'
 import {
   createPosAsset,
+  ensureCustomerPlanogram,
   ensureSeededOnce,
   fetchAll,
+  fetchInventoryMovements,
+  fetchLocations,
+  fetchLots,
   receivePoLine,
   saveSurveyResult,
   submitSalesOrder,
@@ -84,6 +88,10 @@ export interface AppData {
   }) => Promise<PosAsset>
   assignSku: (locationId: string, sku: string | null) => Promise<void>
   patchShelfSlot: (id: string, patch: Partial<ShelfSlot>) => Promise<void>
+  /** Ensure the account has its own planogram (copying the template) and load it. */
+  ensureAccountPlanogram: (customerId: string) => Promise<ShelfSlot[]>
+  /** Re-read lots, locations and movements (e.g. after a FEFO pick). */
+  reloadInventory: () => Promise<void>
 }
 
 const DataContext = createContext<AppData | null>(null)
@@ -291,6 +299,24 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
+  const ensureAccountPlanogram = useCallback(async (customerId: string) => {
+    const rows = await ensureCustomerPlanogram(customerId)
+    setData((prev) => {
+      const ids = new Set(rows.map((r) => r.id))
+      return { ...prev, shelfSlots: [...prev.shelfSlots.filter((s) => !ids.has(s.id)), ...rows] }
+    })
+    return rows
+  }, [])
+
+  const reloadInventory = useCallback(async () => {
+    const [lots, locations, inventoryMovements] = await Promise.all([
+      fetchLots(),
+      fetchLocations(),
+      fetchInventoryMovements(25),
+    ])
+    setData((prev) => ({ ...prev, lots, locations, inventoryMovements }))
+  }, [])
+
   const value = useMemo<AppData>(
     () => ({
       ...data,
@@ -310,6 +336,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       requestPosAsset,
       assignSku,
       patchShelfSlot,
+      ensureAccountPlanogram,
+      reloadInventory,
     }),
     [
       data,
@@ -329,6 +357,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       requestPosAsset,
       assignSku,
       patchShelfSlot,
+      ensureAccountPlanogram,
+      reloadInventory,
     ],
   )
 

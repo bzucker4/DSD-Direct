@@ -28,6 +28,8 @@ export function PosManagement() {
   const [customerId, setCustomerId] = useState(customers[0]?.id ?? 'c1')
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
 
   async function advance(id: string) {
     const asset = posAssets.find((a) => a.id === id)
@@ -35,18 +37,27 @@ export function PosManagement() {
     const idx = workflow.indexOf(asset.status)
     if (idx < 0 || idx >= workflow.length - 1) return
     setBusy(true)
+    setError('')
+    setMessage('')
     try {
       await advancePosStatus(id, workflow[idx + 1])
+    } catch (err) {
+      setError(`Status update failed: ${err instanceof Error ? err.message : 'unknown error'}`)
     } finally {
       setBusy(false)
     }
   }
 
   async function request() {
-    if (!name.trim()) return
+    setError('')
+    setMessage('')
+    if (!name.trim()) {
+      setError('Enter an asset name')
+      return
+    }
     setBusy(true)
     try {
-      await requestPosAsset({
+      const asset = await requestPosAsset({
         name: name.trim(),
         type,
         customerId,
@@ -54,6 +65,10 @@ export function PosManagement() {
       })
       setName('')
       setNotes('')
+      setMessage(`Requested “${asset.name}”`)
+    } catch (err) {
+      // Keep the form filled so the rep can retry
+      setError(`POS request failed: ${err instanceof Error ? err.message : 'unknown error'}`)
     } finally {
       setBusy(false)
     }
@@ -114,6 +129,16 @@ export function PosManagement() {
           >
             Submit request
           </button>
+          {error && (
+            <p role="alert" className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+              {error}
+            </p>
+          )}
+          {message && (
+            <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
+              {message}
+            </p>
+          )}
         </Card>
 
         <Card title="Asset workflow" className="lg:col-span-3">

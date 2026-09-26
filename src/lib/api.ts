@@ -292,6 +292,7 @@ type ShelfSlotRow = {
 export function mapShelfSlot(row: ShelfSlotRow): ShelfSlot {
   return {
     id: row.id,
+    customerId: row.customer_id,
     shelf: num(row.shelf),
     position: num(row.position),
     productId: row.product_id,
@@ -882,6 +883,15 @@ export async function updateLocationAssignedSku(
     .update({ assigned_sku: assignedSku })
     .eq('id', locationId)
   throwIf(error)
+}
+
+/** Copy the template planogram to an account (first edit) and return its slots. */
+export async function ensureCustomerPlanogram(customerId: string): Promise<ShelfSlot[]> {
+  const { data, error } = await supabase.rpc('ensure_customer_planogram', {
+    p_customer_id: customerId,
+  })
+  throwIf(error)
+  return ((data ?? []) as ShelfSlotRow[]).map(mapShelfSlot)
 }
 
 export async function updateShelfSlotRow(id: string, patch: Partial<ShelfSlot>): Promise<void> {

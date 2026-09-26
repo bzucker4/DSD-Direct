@@ -8,7 +8,7 @@ import { useAppData } from '../lib/DataContext'
 import type { FefoStatus } from '../types'
 
 export function Inventory() {
-  const { lots, products, getProduct } = useAppData()
+  const { lots, products, getProduct, reloadInventory } = useAppData()
   const [statusFilter, setStatusFilter] = useState<FefoStatus | 'all'>('all')
   const [search, setSearch] = useState('')
   const [allocSku, setAllocSku] = useState(products[0]?.id ?? '')
@@ -42,9 +42,11 @@ export function Inventory() {
       const result = await allocateFefoPick(
         allocSku,
         allocQty,
-        `demo-pick-${Date.now()}`,
+        `pick-${Date.now()}`,
       )
       setAllocResult(result)
+      // Show the deducted quantities right away
+      await reloadInventory()
     } catch (err) {
       setAllocError(err instanceof Error ? err.message : 'FEFO allocate failed')
       setAllocResult(null)
@@ -124,9 +126,10 @@ export function Inventory() {
           </div>
         </Card>
 
-        <Card title="FEFO allocation">
+        <Card title="FEFO pick">
           <p className="mb-3 text-xs text-slate-500">
-            Server FEFO via <span className="font-mono">allocate_fefo_pick</span>. Expired lots are skipped.
+            Picks earliest-expiring lots first and <strong>deducts the cases from stock</strong> (lots
+            and location occupancy). Expired lots are skipped.
           </p>
           <label className="block text-xs font-medium text-slate-600">Product</label>
           <select
@@ -154,7 +157,7 @@ export function Inventory() {
             disabled={allocBusy || !allocSku}
             className="mt-4 w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40"
           >
-            {allocBusy ? 'Allocating…' : 'Allocate FEFO'}
+            {allocBusy ? 'Picking…' : 'Pick & deduct stock (FEFO)'}
           </button>
           {allocError && (
             <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">

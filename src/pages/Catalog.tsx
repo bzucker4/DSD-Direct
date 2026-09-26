@@ -13,12 +13,14 @@ export function Catalog() {
   const [customerId, setCustomerId] = useState(customers[0]?.id ?? 'c1')
   const [cart, setCart] = useState<Record<string, number>>({})
   const [toast, setToast] = useState('')
+  const [toastError, setToastError] = useState(false)
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
   const [priceMap, setPriceMap] = useState<Map<string, ResolvedPrice>>(new Map())
   const [pricesLoading, setPricesLoading] = useState(false)
 
   const customer = getCustomer(customerId) ?? customers[0]
+  const accountOrders = salesOrders.filter((o) => o.customerId === customer?.id)
   const history = orderHistoryFor(customerId)
   const maxHist = Math.max(...history.map((h) => h.cases), 1)
 
@@ -108,10 +110,12 @@ export function Catalog() {
     try {
       const order = await submitOrder(customer.id, lines)
       setCart({})
+      setToastError(false)
       setToast(`Order ${order.id} submitted for ${customer.name} — $${total.toFixed(2)}`)
       setTimeout(() => setToast(''), 4000)
     } catch (err) {
-      setToast(err instanceof Error ? err.message : 'Failed to submit order')
+      setToastError(true)
+      setToast(`Order failed: ${err instanceof Error ? err.message : 'unknown error'}`)
     } finally {
       setSaving(false)
     }
@@ -154,7 +158,12 @@ export function Catalog() {
       </div>
 
       {toast && (
-        <div className="mb-4 rounded-lg bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800">
+        <div
+          role={toastError ? 'alert' : undefined}
+          className={`mb-4 rounded-lg px-4 py-2 text-sm font-medium ${
+            toastError ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-800'
+          }`}
+        >
           {toast}
         </div>
       )}
@@ -286,18 +295,20 @@ export function Catalog() {
             )}
           </Card>
 
-          {salesOrders.length > 0 && (
-            <Card title="Submitted">
+          <Card title="Submitted">
+            {accountOrders.length === 0 ? (
+              <p className="text-sm text-slate-500">No orders submitted for this account yet.</p>
+            ) : (
               <ul className="space-y-2 text-xs">
-                {salesOrders.slice(0, 5).map((o) => (
+                {accountOrders.slice(0, 5).map((o) => (
                   <li key={o.id} className="rounded-lg bg-slate-50 px-2 py-1.5">
                     <span className="font-mono font-medium">{o.id.slice(0, 8)}</span>
                     <span className="float-right font-semibold">${o.total.toFixed(2)}</span>
                   </li>
                 ))}
               </ul>
-            </Card>
-          )}
+            )}
+          </Card>
         </div>
       </div>
     </div>

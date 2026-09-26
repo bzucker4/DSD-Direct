@@ -132,6 +132,8 @@ export interface PosAsset {
 
 export interface ShelfSlot {
   id: string
+  /** null/undefined = shared template; otherwise the account's own layout */
+  customerId?: string | null
   shelf: number
   position: number
   productId: string | null
