@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -22,7 +23,7 @@ import {
   type InventoryMovement,
   type OrderHistoryPointRow,
 } from './api'
-import { useAuth } from './AuthContext'
+import { canAccessWarehouse, useAuth } from './AuthContext'
 import type {
   CatalogOrderLine,
   Customer,
@@ -105,30 +106,49 @@ const empty = {
 }
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const { session } = useAuth()
+  const { session, role } = useAuth()
+  // Key data loading on the signed-in user, not the session object: token
+  // refreshes and password updates emit a new session and must not refetch
+  // everything (which unmounted the current page and lost its state).
+  const userId = session?.user?.id ?? null
+  const canSeed = canAccessWarehouse(role)
   const [data, setData] = useState(empty)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const loadedFor = useRef<string | null>(null)
 
   const refresh = useCallback(async () => {
-    if (!session) {
+    if (!userId) {
+      loadedFor.current = null
       setData(empty)
       setLoading(false)
       setError(null)
       return
     }
-    setLoading(true)
+    // Only show the full-page loading state on the first load for this user;
+    // background refreshes (e.g. after an import) keep the current page mounted.
+    const initial = loadedFor.current !== userId
+    if (initial) setLoading(true)
     try {
-      await ensureSeededOnce()
+      // Demo seeding writes warehouse-only tables; field reps can't (RLS) and
+      // must not be blocked by it. Seeding is best-effort for everyone.
+      if (canSeed) {
+        try {
+          await ensureSeededOnce()
+        } catch (seedErr) {
+          console.warn('Demo seed skipped:', seedErr)
+        }
+      }
       const next = await fetchAll()
       setData(next)
       setError(null)
+      loadedFor.current = userId
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load live data')
     } finally {
-      setLoading(false)
+      if (initial) setLoading(false)
     }
-  }, [session])
+  }, [userId, canSeed])
 
   useEffect(() => {
     void refresh()

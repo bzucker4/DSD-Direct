@@ -328,7 +328,9 @@ export function mapOrderHistory(row: OrderHistoryRow): OrderHistoryPointRow {
 type InventoryMovementRow = {
   id: string
   product_id: string | null
-  location_id: string | null
+  location_id?: string | null
+  to_location_id?: string | null
+  from_location_id?: string | null
   lot_id: string | null
   qty: number | string
   movement_type: string
@@ -353,7 +355,7 @@ export function mapInventoryMovement(row: InventoryMovementRow): InventoryMoveme
   return {
     id: row.id,
     productId: row.product_id ?? '',
-    locationId: row.location_id ?? '',
+    locationId: row.to_location_id ?? row.from_location_id ?? row.location_id ?? '',
     lotId: row.lot_id ?? '',
     qty: num(row.qty),
     movementType: row.movement_type,
@@ -1135,41 +1137,37 @@ export function parseCsv(text: string): { headers: string[]; rows: Record<string
 
 async function writeImportBatch(
   kind: ImportKind,
+  rowCount: number,
   inserted: number,
   updated: number,
   errors: string[],
+  filename?: string,
 ): Promise<string | undefined> {
+  // Columns match public.import_batches: kind, filename, row_count,
+  // success_count, error_count, errors (jsonb), created_by.
+  const { data: auth } = await supabase.auth.getUser()
   const row = {
     kind,
-    inserted_count: inserted,
-    updated_count: updated,
+    filename: filename ?? null,
+    row_count: rowCount,
+    success_count: inserted + updated,
     error_count: errors.length,
     errors: errors.slice(0, 50),
-    created_at: new Date().toISOString(),
+    created_by: auth.user?.id ?? null,
   }
   const { data, error } = await supabase.from('import_batches').insert(row).select('id').maybeSingle()
-  // Don't fail the import if audit insert fails (schema may vary slightly)
+  // Don't fail the import if the audit insert fails
   if (error) {
-    // try alternate column names
-    const alt = {
-      import_type: kind,
-      inserted,
-      updated,
-      error_count: errors.length,
-      error_messages: errors.slice(0, 50),
-    }
-    const { data: d2, error: e2 } = await supabase
-      .from('import_batches')
-      .insert(alt)
-      .select('id')
-      .maybeSingle()
-    if (e2) return undefined
-    return d2?.id as string | undefined
+    console.warn('import_batches insert failed:', error.message)
+    return undefined
   }
   return data?.id as string | undefined
 }
 
-export async function importProductsCsv(text: string): Promise<ImportBatchResult> {
+export async function importProductsCsv(
+  text: string,
+  filename?: string,
+): Promise<ImportBatchResult> {
   const { rows } = parseCsv(text)
   const errors: string[] = []
   let inserted = 0
@@ -1212,11 +1210,14 @@ export async function importProductsCsv(text: string): Promise<ImportBatchResult
     }
   }
 
-  const batchId = await writeImportBatch('products', inserted, updated, errors)
+  const batchId = await writeImportBatch('products', rows.length, inserted, updated, errors, filename)
   return { id: batchId, kind: 'products', inserted, updated, errors }
 }
 
-export async function importCustomersCsv(text: string): Promise<ImportBatchResult> {
+export async function importCustomersCsv(
+  text: string,
+  filename?: string,
+): Promise<ImportBatchResult> {
   const { rows } = parseCsv(text)
   const errors: string[] = []
   let inserted = 0
@@ -1267,11 +1268,14 @@ export async function importCustomersCsv(text: string): Promise<ImportBatchResul
     }
   }
 
-  const batchId = await writeImportBatch('customers', inserted, updated, errors)
+  const batchId = await writeImportBatch('customers', rows.length, inserted, updated, errors, filename)
   return { id: batchId, kind: 'customers', inserted, updated, errors }
 }
 
-export async function importPricesCsv(text: string): Promise<ImportBatchResult> {
+export async function importPricesCsv(
+  text: string,
+  filename?: string,
+): Promise<ImportBatchResult> {
   const { rows } = parseCsv(text)
   const errors: string[] = []
   let inserted = 0
@@ -1326,6 +1330,6 @@ export async function importPricesCsv(text: string): Promise<ImportBatchResult> 
     }
   }
 
-  const batchId = await writeImportBatch('prices', inserted, updated, errors)
+  const batchId = await writeImportBatch('prices', rows.length, inserted, updated, errors, filename)
   return { id: batchId, kind: 'prices', inserted, updated, errors }
 }

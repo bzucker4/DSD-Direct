@@ -169,7 +169,9 @@ export function Inventory() {
                 <ul className="space-y-1">
                   {allocResult.allocations.map((a) => (
                     <li key={a.lotId} className="flex justify-between text-xs">
-                      <span className="font-mono">{a.lotCode}</span>
+                      <span className="font-mono">
+                        {a.lotCode || lots.find((l) => l.id === a.lotId)?.lotCode || a.lotId}
+                      </span>
                       <span className="font-medium">{a.qty} cs</span>
                     </li>
                   ))}

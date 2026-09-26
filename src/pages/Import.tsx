@@ -94,9 +94,9 @@ export function ImportPage() {
     setResult(null)
     try {
       let res: ImportBatchResult
-      if (kind === 'products') res = await importProductsCsv(csvText)
-      else if (kind === 'customers') res = await importCustomersCsv(csvText)
-      else res = await importPricesCsv(csvText)
+      if (kind === 'products') res = await importProductsCsv(csvText, fileName)
+      else if (kind === 'customers') res = await importCustomersCsv(csvText, fileName)
+      else res = await importPricesCsv(csvText, fileName)
       setResult(res)
       await refresh()
       if (kind === 'prices') await loadPrices()
