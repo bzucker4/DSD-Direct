@@ -135,15 +135,20 @@ export function CycleCounting() {
                         <td className="py-2 pr-2">
                           <input
                             type="number"
+                            key={`${line.locationId}-${line.productId}-${line.countedQty ?? ''}`}
                             disabled={active.status === 'complete' || busy}
-                            value={line.countedQty ?? ''}
-                            onChange={(e) =>
-                              void setCounted(
-                                line.locationId,
-                                line.productId,
-                                e.target.value === '' ? null : Number(e.target.value),
-                              )
-                            }
+                            defaultValue={line.countedQty ?? ''}
+                            // Save on blur/Enter: saving per keystroke disabled the
+                            // input mid-typing and dropped digits (e.g. "12" -> "1").
+                            onBlur={(e) => {
+                              const next = e.target.value === '' ? null : Number(e.target.value)
+                              if (next !== line.countedQty) {
+                                void setCounted(line.locationId, line.productId, next)
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') e.currentTarget.blur()
+                            }}
                             className="w-20 rounded border border-slate-200 px-2 py-1 text-sm disabled:bg-slate-50"
                           />
                         </td>
