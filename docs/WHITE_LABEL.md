@@ -98,7 +98,7 @@ In the new project:
 ### Load master data
 
 - Sign in once as the admin: the app seeds the RED survey questions and the shared planogram
-  template (empty slots until the client's products exist). The Wright demo cycle counts /
+  template (empty slots until the client's products exist). The built-in demo cycle counts /
   pick orders / POS assets are only seeded when their demo locations/customers/products exist,
   so a new project stays clean.
 - **CSV Import** page (admin/warehouse), in this order: products → customers → prices.
@@ -163,7 +163,7 @@ Branding (all optional; unset or empty = default, which is the original DSD Dire
 | `VITE_BRAND_SLUG` | `default` | `acme` | asset folder `public/brands/<slug>/` |
 | `VITE_BRAND_PRODUCT_NAME` | `DSD Direct` | `Acme Route` | login heading, sidebar, `<title>`, PWA name |
 | `VITE_BRAND_SHORT_NAME` | product name | `Acme Route` | PWA `short_name`, iOS home-screen title (≤ 12 chars) |
-| `VITE_BRAND_COMPANY_NAME` | `Wright Beverage` | `Acme Beverage` | login subtitle, sidebar, dashboard, meta description |
+| `VITE_BRAND_COMPANY_NAME` | `Demo Beverage Distributing` | `Acme Beverage` | login subtitle, sidebar, dashboard, meta description |
 | `VITE_BRAND_TAGLINE` | `Warehouse & Field Sales` | `Warehouse & Route Sales` | login subtitle, `<title>` suffix |
 | `VITE_BRAND_NAV_TAGLINE` | `WMS + Field Sales` | `WMS + Route Sales` | sidebar under the product name |
 | `VITE_BRAND_HEADLINE` | `Functional & modern warehouse + field sales for DSD distributors` | `Acme Beverage warehouse + route sales` | top header bar |

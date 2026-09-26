@@ -4,7 +4,7 @@ Functional & modern **warehouse + field sales** app for Direct Store Delivery (D
 
 SPA built with **Vite · React · TypeScript · Tailwind CSS · React Router · Supabase · PWA**.
 
-Demo catalog is modeled on **Wright Beverage Distributing** (wrightbev.com) — Upstate NY beer, cider, hard tea, hard seltzer, and NA beverage portfolio.
+Demo data belongs to a fictional distributor, **Demo Beverage Distributing** — an Upstate NY beer, cider, hard tea, hard seltzer, and NA beverage portfolio.
 
 ## Auth & roles
 

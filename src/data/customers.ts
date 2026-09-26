@@ -3,7 +3,7 @@ import type { Customer } from '../types'
 export const customers: Customer[] = [
   {
     id: 'c1',
-    name: 'Wegmans Rochester #18',
+    name: 'Harvest Market #18',
     accountNumber: 'WG-018',
     type: 'grocery',
     address: '1750 East Ave',

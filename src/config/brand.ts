@@ -1,5 +1,5 @@
 // The app's single brand object. Values come from VITE_BRAND_* env vars at build time
-// (defaults = the original DSD Direct / Wright Beverage branding). See brand.core.ts.
+// (defaults = the stock DSD Direct / Demo Beverage Distributing branding). See brand.core.ts.
 import { resolveBrand, type BrandConfig } from './brand.core'
 
 export type { BrandConfig } from './brand.core'

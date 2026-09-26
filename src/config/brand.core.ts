@@ -2,8 +2,8 @@
 // build (vite.config.ts / vite-plugin-brand.ts). No imports and no import.meta here, so
 // this file runs both in the browser bundle and in Node at build time.
 //
-// Every value comes from a VITE_BRAND_* env var; the defaults reproduce the original
-// DSD Direct / Wright Beverage site exactly. See .env.example and docs/WHITE_LABEL.md.
+// Every value comes from a VITE_BRAND_* env var; the defaults are the stock
+// DSD Direct / Demo Beverage Distributing branding. See .env.example and docs/WHITE_LABEL.md.
 
 export interface BrandPalette {
   50: string
@@ -148,7 +148,7 @@ export function brandAssetUrl(slug: string, value: string): string {
 export function resolveBrand(env: BrandEnv = {}): BrandConfig {
   const slug = str(env, 'VITE_BRAND_SLUG', 'default').replace(/[^a-z0-9-_]/gi, '') || 'default'
   const productName = str(env, 'VITE_BRAND_PRODUCT_NAME', 'DSD Direct')
-  const companyName = str(env, 'VITE_BRAND_COMPANY_NAME', 'Wright Beverage')
+  const companyName = str(env, 'VITE_BRAND_COMPANY_NAME', 'Demo Beverage Distributing')
   const primaryColor = normalizeHex(str(env, 'VITE_BRAND_PRIMARY_COLOR', DEFAULT_PRIMARY), DEFAULT_PRIMARY)
   const accentColor = normalizeHex(str(env, 'VITE_BRAND_ACCENT_COLOR', DEFAULT_ACCENT), DEFAULT_ACCENT)
   const initials = productName
