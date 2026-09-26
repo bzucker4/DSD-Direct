@@ -894,6 +894,15 @@ export async function ensureCustomerPlanogram(customerId: string): Promise<Shelf
   return ((data ?? []) as ShelfSlotRow[]).map(mapShelfSlot)
 }
 
+/** Delete an account's own planogram so it falls back to the shared template. */
+export async function resetCustomerPlanogram(customerId: string): Promise<number> {
+  const { data, error } = await supabase.rpc('reset_customer_planogram', {
+    p_customer_id: customerId,
+  })
+  throwIf(error)
+  return num(data)
+}
+
 export async function updateShelfSlotRow(id: string, patch: Partial<ShelfSlot>): Promise<void> {
   const row: Record<string, unknown> = {}
   if (patch.productId !== undefined) row.product_id = patch.productId

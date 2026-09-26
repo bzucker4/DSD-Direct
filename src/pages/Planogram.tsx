@@ -5,13 +5,21 @@ import { useAppData } from '../lib/DataContext'
 import type { ShelfSlot } from '../types'
 
 export function Planogram() {
-  const { customers, products, shelfSlots, getProduct, patchShelfSlot, ensureAccountPlanogram } =
-    useAppData()
+  const {
+    customers,
+    products,
+    shelfSlots,
+    getProduct,
+    patchShelfSlot,
+    ensureAccountPlanogram,
+    resetAccountPlanogram,
+  } = useAppData()
   const [customerId, setCustomerId] = useState(customers[0]?.id ?? 'c1')
   // Select by shelf/position so the selection survives the template → account copy
   const [selected, setSelected] = useState<{ shelf: number; position: number } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
 
   // The account's own layout if it has one, otherwise the shared template (customer_id NULL)
   const accountSlots = shelfSlots.filter((s) => s.customerId === customerId)
@@ -33,9 +41,27 @@ export function Planogram() {
     })
   }
 
+  async function resetLayout() {
+    const name = customers.find((c) => c.id === customerId)?.name ?? 'this account'
+    if (!window.confirm(`Remove ${name}'s custom layout and go back to the shared layout?`)) return
+    setBusy(true)
+    setError('')
+    setMessage('')
+    try {
+      await resetAccountPlanogram(customerId)
+      setSelected(null)
+      setMessage(`${name} is back on the shared layout.`)
+    } catch (err) {
+      setError(`Reset failed: ${err instanceof Error ? err.message : 'unknown error'}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function updateSlot(slot: ShelfSlot, patch: Partial<ShelfSlot>) {
     setBusy(true)
     setError('')
+    setMessage('')
     try {
       let targetId = slot.id
       if (!slot.customerId) {
@@ -70,6 +96,7 @@ export function Planogram() {
             setCustomerId(e.target.value)
             setSelected(null)
             setError('')
+            setMessage('')
           }}
           className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
         >
@@ -93,9 +120,29 @@ export function Planogram() {
         >
           {usingTemplate ? 'Template layout (edit to customize)' : 'Account layout'}
         </span>
+        {!usingTemplate && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void resetLayout()}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+          >
+            Reset to shared layout
+          </button>
+        )}
       </div>
       {error && (
-        <p className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</p>
+        <p role="alert" className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+          {error}
+        </p>
+      )}
+      {message && (
+        <p
+          role="status"
+          className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800"
+        >
+          {message}
+        </p>
       )}
 
       <div className="mx-auto grid max-w-3xl gap-4 lg:grid-cols-5">

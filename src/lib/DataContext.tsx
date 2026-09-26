@@ -11,6 +11,7 @@ import {
 import {
   createPosAsset,
   ensureCustomerPlanogram,
+  resetCustomerPlanogram,
   ensureSeededOnce,
   fetchAll,
   fetchInventoryMovements,
@@ -90,6 +91,8 @@ export interface AppData {
   patchShelfSlot: (id: string, patch: Partial<ShelfSlot>) => Promise<void>
   /** Ensure the account has its own planogram (copying the template) and load it. */
   ensureAccountPlanogram: (customerId: string) => Promise<ShelfSlot[]>
+  /** Remove the account's own planogram (template rows are never touched). */
+  resetAccountPlanogram: (customerId: string) => Promise<number>
   /** Re-read lots, locations and movements (e.g. after a FEFO pick). */
   reloadInventory: () => Promise<void>
 }
@@ -308,6 +311,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return rows
   }, [])
 
+  const resetAccountPlanogram = useCallback(async (customerId: string) => {
+    const removed = await resetCustomerPlanogram(customerId)
+    setData((prev) => ({
+      ...prev,
+      shelfSlots: prev.shelfSlots.filter((s) => s.customerId !== customerId),
+    }))
+    return removed
+  }, [])
+
   const reloadInventory = useCallback(async () => {
     const [lots, locations, inventoryMovements] = await Promise.all([
       fetchLots(),
@@ -337,6 +349,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       assignSku,
       patchShelfSlot,
       ensureAccountPlanogram,
+      resetAccountPlanogram,
       reloadInventory,
     }),
     [
@@ -358,6 +371,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       assignSku,
       patchShelfSlot,
       ensureAccountPlanogram,
+      resetAccountPlanogram,
       reloadInventory,
     ],
   )
