@@ -4,6 +4,7 @@ import { PageHeader } from '../components/PageHeader'
 import { Badge } from '../components/Badge'
 import { canAccessField, canAccessWarehouse, useAuth } from '../lib/AuthContext'
 import { useAppData } from '../lib/DataContext'
+import { brand } from '../config/brand'
 import {
   cycleCountsDue,
   fefoAlertCount,
@@ -40,7 +41,7 @@ export function Dashboard() {
     <div>
       <PageHeader
         title="Operations Dashboard"
-        subtitle="Rochester DC — Wright Beverage warehouse KPIs and today's work"
+        subtitle={`${brand.dcName} — ${brand.companyName} warehouse KPIs and today's work`}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">

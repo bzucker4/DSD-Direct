@@ -577,8 +577,79 @@ async function isEmpty(table: string): Promise<boolean> {
   return (count ?? 0) === 0
 }
 
+/** True when every id exists in `table` (demo seed rows reference the demo master data). */
+async function allExist(table: string, ids: (string | null | undefined)[]): Promise<boolean> {
+  const unique = [...new Set(ids.filter((id): id is string => !!id))]
+  if (unique.length === 0) return true
+  const { count, error } = await supabase
+    .from(table)
+    .select('id', { count: 'exact', head: true })
+    .in('id', unique)
+  throwIf(error)
+  return (count ?? 0) === unique.length
+}
+
+/**
+ * Best-effort first-run seeding of empty tables. Each step is independent, so a step the
+ * caller's role can't write (RLS) or whose references are missing doesn't block the rest.
+ * - Generic setup any client needs: RED survey questions (admin) and the shared planogram
+ *   template (products that don't exist in this project become empty slots).
+ * - Demo operational data (cycle counts, pick orders, POS assets) is only inserted when the
+ *   demo locations/customers/products it points at exist, so a new client's project
+ *   doesn't get half-inserted demo rows.
+ */
 export async function ensureSeeded(): Promise<void> {
-  if (await isEmpty('cycle_counts')) {
+  const failures: string[] = []
+  const step = async (table: string, run: () => Promise<void>) => {
+    try {
+      if (await isEmpty(table)) await run()
+    } catch (err) {
+      failures.push(`${table}: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  await step('survey_questions', async () => {
+    const rows = seedSurveyQuestions.map((q, i) => ({
+      id: q.id,
+      label: q.label,
+      type: q.type,
+      category: q.category,
+      options: q.options ?? null,
+      sort_order: i + 1,
+    }))
+    const { error } = await supabase.from('survey_questions').upsert(rows, { onConflict: 'id' })
+    throwIf(error)
+  })
+
+  await step('shelf_slots', async () => {
+    const plan = defaultShelfPlan()
+    const productIds = plan.map((s) => s.productId).filter((id): id is string => !!id)
+    const { data: existing, error: pErr } = await supabase
+      .from('products')
+      .select('id')
+      .in('id', [...new Set(productIds)])
+    throwIf(pErr)
+    const known = new Set((existing ?? []).map((r: { id: string }) => r.id))
+    const rows = plan.map((s) => ({
+      id: s.id,
+      customer_id: null,
+      shelf: s.shelf,
+      position: s.position,
+      product_id: s.productId && known.has(s.productId) ? s.productId : null,
+      competitor_brand: s.competitorBrand,
+      oos: s.oos,
+      facing_count: s.facingCount,
+    }))
+    const { error } = await supabase.from('shelf_slots').upsert(rows, { onConflict: 'id' })
+    throwIf(error)
+  })
+
+  await step('cycle_counts', async () => {
+    const seedLines = seedCycleCounts.flatMap((c) => c.lines)
+    const refsExist =
+      (await allExist('locations', seedLines.map((l) => l.locationId))) &&
+      (await allExist('products', seedLines.map((l) => l.productId)))
+    if (!refsExist) return
     const headers = seedCycleCounts.map((c) => ({
       id: c.id,
       zone: c.zone,
@@ -599,9 +670,13 @@ export async function ensureSeeded(): Promise<void> {
     )
     const { error: lErr } = await supabase.from('cycle_count_lines').insert(lines)
     throwIf(lErr)
-  }
+  })
 
-  if (await isEmpty('pick_orders')) {
+  await step('pick_orders', async () => {
+    const refsExist =
+      (await allExist('customers', seedPickOrders.map((p) => p.customerId))) &&
+      (await allExist('products', seedPickOrders.flatMap((p) => p.lines.map((l) => l.productId))))
+    if (!refsExist) return
     const headers = seedPickOrders.map((p) => ({
       id: p.id,
       customer_id: p.customerId,
@@ -619,22 +694,10 @@ export async function ensureSeeded(): Promise<void> {
     )
     const { error: lErr } = await supabase.from('pick_order_lines').insert(lines)
     throwIf(lErr)
-  }
+  })
 
-  if (await isEmpty('survey_questions')) {
-    const rows = seedSurveyQuestions.map((q, i) => ({
-      id: q.id,
-      label: q.label,
-      type: q.type,
-      category: q.category,
-      options: q.options ?? null,
-      sort_order: i + 1,
-    }))
-    const { error } = await supabase.from('survey_questions').upsert(rows, { onConflict: 'id' })
-    throwIf(error)
-  }
-
-  if (await isEmpty('pos_assets')) {
+  await step('pos_assets', async () => {
+    if (!(await allExist('customers', seedPosAssets.map((a) => a.customerId)))) return
     const rows = seedPosAssets.map((a) => ({
       id: a.id,
       name: a.name,
@@ -646,22 +709,9 @@ export async function ensureSeeded(): Promise<void> {
     }))
     const { error } = await supabase.from('pos_assets').upsert(rows, { onConflict: 'id' })
     throwIf(error)
-  }
+  })
 
-  if (await isEmpty('shelf_slots')) {
-    const rows = defaultShelfPlan().map((s) => ({
-      id: s.id,
-      customer_id: null,
-      shelf: s.shelf,
-      position: s.position,
-      product_id: s.productId,
-      competitor_brand: s.competitorBrand,
-      oos: s.oos,
-      facing_count: s.facingCount,
-    }))
-    const { error } = await supabase.from('shelf_slots').upsert(rows, { onConflict: 'id' })
-    throwIf(error)
-  }
+  if (failures.length) throw new Error(`Seed skipped: ${failures.join('; ')}`)
 }
 
 let seedPromise: Promise<void> | null = null

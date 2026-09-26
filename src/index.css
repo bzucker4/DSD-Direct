@@ -2,16 +2,25 @@
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --color-brand-50: #eff6ff;
-  --color-brand-100: #dbeafe;
-  --color-brand-200: #bfdbfe;
-  --color-brand-300: #93c5fd;
-  --color-brand-400: #60a5fa;
-  --color-brand-500: #3b82f6;
-  --color-brand-600: #2563eb;
-  --color-brand-700: #1d4ed8;
-  --color-brand-800: #1e40af;
-  --color-brand-900: #1e3a8a;
+}
+
+/* Brand colors. The --brand-* variables are injected into index.html at build time from
+   src/config/brand.core.ts (VITE_BRAND_PRIMARY_COLOR / VITE_BRAND_ACCENT_COLOR); the
+   fallbacks below are the default (original) palette. Use the Tailwind classes
+   brand-50 … brand-900, brand-primary and brand-accent; never hardcode brand hex values. */
+@theme inline {
+  --color-brand-50: var(--brand-50, #eff6ff);
+  --color-brand-100: var(--brand-100, #dbeafe);
+  --color-brand-200: var(--brand-200, #bfdbfe);
+  --color-brand-300: var(--brand-300, #93c5fd);
+  --color-brand-400: var(--brand-400, #60a5fa);
+  --color-brand-500: var(--brand-500, #3b82f6);
+  --color-brand-600: var(--brand-600, #2563eb);
+  --color-brand-700: var(--brand-700, #1d4ed8);
+  --color-brand-800: var(--brand-800, #1e40af);
+  --color-brand-900: var(--brand-900, #1e3a8a);
+  --color-brand-primary: var(--brand-primary, #2563eb);
+  --color-brand-accent: var(--brand-accent, #1e40af);
 }
 
 html, body, #root {
@@ -21,7 +30,7 @@ html, body, #root {
 body {
   margin: 0;
   font-family: var(--font-sans);
-  background: #f8fafc;
+  background: var(--brand-bg, #f8fafc);
   color: #0f172a;
   -webkit-font-smoothing: antialiased;
 }

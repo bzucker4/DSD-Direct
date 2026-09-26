@@ -1,6 +1,8 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useState } from 'react'
 import { useAppData } from '../lib/DataContext'
+import { brand, isDemoEmail } from '../config/brand'
+import { BrandMark } from './BrandMark'
 import { canAccessField, canAccessWarehouse, useAuth, type AppRole } from '../lib/AuthContext'
 
 const warehouseNav = [
@@ -50,17 +52,17 @@ export function Layout() {
   const { user, role, signOut } = useAuth()
   const showWarehouse = canAccessWarehouse(role)
   const showField = canAccessField(role)
-  const isDemo = (user?.email ?? '').endsWith('@dsddirect.demo')
+  const isDemo = brand.showDemoBanner && isDemoEmail(user?.email)
 
   const sidebar = (
     <>
       <div className="flex items-center gap-2 px-3 py-4">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand-600 to-brand-800 text-sm font-bold text-white shadow">
-          DD
-        </div>
+        <BrandMark />
         <div>
-          <div className="text-sm font-bold text-slate-900">DSD Direct</div>
-          <div className="text-[11px] text-slate-500">Wright Beverage · WMS + Field Sales</div>
+          <div className="text-sm font-bold text-slate-900">{brand.productName}</div>
+          <div className="text-[11px] text-slate-500">
+            {brand.companyName} · {brand.navTagline}
+          </div>
         </div>
       </div>
 
@@ -104,7 +106,7 @@ export function Layout() {
         <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
           <span className="font-medium text-emerald-700">Live · Authenticated</span>
           <br />
-          <span className="text-slate-500">Supabase · Rochester DC</span>
+          <span className="text-slate-500">Supabase · {brand.dcName}</span>
         </div>
         <div className="rounded-lg border border-slate-100 px-3 py-2 text-xs">
           <p className="truncate font-medium text-slate-800">{user?.email}</p>
@@ -162,9 +164,7 @@ export function Layout() {
             Menu
           </button>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm text-slate-500">
-              Functional & modern warehouse + field sales for DSD distributors
-            </p>
+            <p className="truncate text-sm text-slate-500">{brand.headline}</p>
           </div>
           <div className="hidden items-center gap-2 sm:flex">
             <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
@@ -173,7 +173,9 @@ export function Layout() {
             <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 ring-1 ring-inset ring-brand-600/20">
               {roleLabel(role)}
             </span>
-            <span className="text-xs text-slate-500">Rochester DC · Route 12</span>
+            <span className="text-xs text-slate-500">
+              {brand.dcName} · {brand.routeLabel}
+            </span>
           </div>
         </header>
         {isDemo && (

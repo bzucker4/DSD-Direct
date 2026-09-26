@@ -103,7 +103,7 @@ New rows get ids like `p_<sku>` / `c_<account>` when inserted.
 Installable via `vite-plugin-pwa`:
 
 - Web app manifest + 192/512 icons
-- Theme color `#1e40af`
+- Name, theme color and icons come from the brand config (`VITE_BRAND_*`, default theme color `#1e40af`)
 - Service worker caches the offline shell (navigate fallback to `index.html`)
 
 ## Local development
@@ -129,7 +129,11 @@ npm run preview  # preview production build
 | Publish directory | `dist` |
 | SPA redirect | `/*` → `/index.html` (200) |
 
-**Required env vars on Netlify:** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
+**Required env vars on Netlify:** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. Optional `VITE_BRAND_*` vars white-label the app (see `.env.example`).
+
+## White-label (new client)
+
+One deployment per client: new Supabase project (schema in `supabase/migrations/`) + new Netlify site from this repo + `VITE_BRAND_*` env vars + optional `public/brands/<slug>/` assets. No code edits. Step-by-step checklist: [`docs/WHITE_LABEL.md`](docs/WHITE_LABEL.md).
 
 ## Production notes
 

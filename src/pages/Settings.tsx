@@ -3,6 +3,7 @@ import { Card } from '../components/Card'
 import { PageHeader } from '../components/PageHeader'
 import { useAuth, type AppRole } from '../lib/AuthContext'
 import { supabase } from '../lib/supabase'
+import { brand, isDemoEmail, supabaseAuthUsersUrl } from '../config/brand'
 
 function roleLabel(role: AppRole | null): string {
   if (role === 'field_rep') return 'Field Rep'
@@ -19,7 +20,7 @@ export function Settings() {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const isDemo = (user?.email ?? '').endsWith('@dsddirect.demo')
+  const isDemo = brand.showDemoBanner && isDemoEmail(user?.email)
 
   async function onChangePassword(e: FormEvent) {
     e.preventDefault()
@@ -73,6 +74,19 @@ export function Settings() {
               <dt className="text-xs font-medium text-slate-500">User id</dt>
               <dd className="mt-0.5 truncate font-mono text-xs text-slate-600">{user?.id ?? '—'}</dd>
             </div>
+            {brand.supportEmail && (
+              <div>
+                <dt className="text-xs font-medium text-slate-500">Support</dt>
+                <dd className="mt-0.5">
+                  <a
+                    className="font-medium text-brand-700 underline"
+                    href={`mailto:${brand.supportEmail}`}
+                  >
+                    {brand.supportEmail}
+                  </a>
+                </dd>
+              </div>
+            )}
           </dl>
           <button
             type="button"
@@ -90,7 +104,7 @@ export function Settings() {
               invite users in{' '}
               <a
                 className="font-medium text-brand-700 underline"
-                href="https://supabase.com/dashboard/project/jdtdtuioenznqyipngvw/auth/users"
+                href={supabaseAuthUsersUrl()}
                 target="_blank"
                 rel="noreferrer"
               >
