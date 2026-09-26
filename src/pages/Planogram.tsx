@@ -14,6 +14,17 @@ export function Planogram() {
   const shelves = [1, 2, 3, 4]
   const sel = slots.find((s) => s.id === selected)
 
+  // Save competitor brand on blur/Enter instead of on every keystroke
+  function commitBrand(raw: string) {
+    if (!sel) return
+    const next = raw.trim() || null
+    if (next === (sel.competitorBrand ?? null)) return
+    void updateSlot(sel.id, {
+      competitorBrand: next,
+      productId: next ? null : sel.productId,
+    })
+  }
+
   async function updateSlot(id: string, patch: Partial<ShelfSlot>) {
     setBusy(true)
     try {
@@ -140,14 +151,13 @@ export function Planogram() {
               <div>
                 <label className="text-xs font-medium text-slate-600">Competitor brand</label>
                 <input
+                  key={`${sel.id}:${sel.competitorBrand ?? ''}`}
                   disabled={busy}
-                  value={sel.competitorBrand ?? ''}
-                  onChange={(e) =>
-                    void updateSlot(sel.id, {
-                      competitorBrand: e.target.value || null,
-                      productId: e.target.value ? null : sel.productId,
-                    })
-                  }
+                  defaultValue={sel.competitorBrand ?? ''}
+                  onBlur={(e) => commitBrand(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitBrand(e.currentTarget.value)
+                  }}
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
                   placeholder="Optional"
                 />
