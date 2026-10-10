@@ -6,3 +6,10 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Demo site: keep it out of search results. Crawling stays allowed (no
+# robots.txt Disallow) so search engines can see this noindex.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Robots-Tag = "noindex"
